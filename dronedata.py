@@ -1,8 +1,17 @@
 from codrone_edu.drone import *
 from collections import deque
 import time
+from datetime import datetime
+import csv
+import boto3
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 sensorData = deque() # Hold the sensor data
+
+# Headers are separate since some algos do not want headers in the data
 sensorDataHeaders = ('temperature', 'pressure', 'elevation',
                      'roll', 'pitch', 'yaw', 'accel_x', 'accel_y', 'accel_z',
                      'angle_x', 'angle_y', 'angle_z', 'angular_speed_x',
@@ -13,7 +22,24 @@ sensorDataHeaders = ('temperature', 'pressure', 'elevation',
                      'color',
                      'battery', 'flight_state', 'movement-state')
 
+filename = "dronedata.csv" # Name of the file to write data to and upload to S3
+
 def getSensorData(d):
+    '''Collects data from each of the 7 sensors:
+    -Temperature/Pressure Sensor (a.k.a Barometer)
+    -Gyroscope & Acceleromter (These are two separate sensors, but the CoDrone EDU docs group
+    their functions together)
+    -Bottom Range Sensor
+    -Front Range Sensor
+    -Optical Flow Sensor
+    -Color Sensor
+    -Sensors (State Data, not a sensor exactly, but additional data about the drone)
+
+    Args:
+        d: A drone object
+
+    The data collected from the sensors is written to the @param sensorData deque as a tuple
+    '''
     # Temperature & Pressure Sensor (a.k.a Barometer)
     d_temp = d.get_drone_temperature()
     d_pressure = d.get_pressure()
@@ -66,7 +92,14 @@ def getSensorData(d):
                        d_battery, d_flight_state, d_movement_state))
 
 def printSensorData():
+    '''Prints the last row of sensor data'''
     print(sensorData[-1])
+
+def writeSensorData():
+    '''Writes the sensor data to a csv file'''
+    with open(filename, mode="w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
+        writer.writerows(sensorData)
 
 drone = Drone()
 drone.connect()
@@ -78,5 +111,15 @@ print(sensorDataHeaders)
 while time.time() < end_time:
     getSensorData(drone)
     printSensorData()
+
+writeSensorData()
+
+# Upload the data to AWS
+s3_client = boto3.client('s3')
+now = datetime.now()
+timestamp = now.strftime("%Y-%m-%d %H%M%S") # Format the date to remove colons to avoid issues
+awspath = f'{timestamp}/{filename}'
+print(awspath)
+s3_client.upload_file(filename, os.environ["AWS_BUCKET"], awspath)
 
 drone.disconnect()
