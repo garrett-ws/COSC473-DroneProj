@@ -3,6 +3,15 @@ from collections import deque
 import time
 
 sensorData = deque() # Hold the sensor data
+sensorDataHeaders = ('temperature', 'pressure', 'elevation',
+                     'roll', 'pitch', 'yaw', 'accel_x', 'accel_y', 'accel_z',
+                     'angle_x', 'angle_y', 'angle_z', 'angular_speed_x',
+                     'angular_speed_y', 'angular_speed_y'
+                     'bottom_range', 'height',
+                     'front_range', 'wall',
+                     'pos_x', 'pos_y', 'pox_z', 'flow_velocity_x', 'flow_velocity_y',
+                     'color',
+                     'battery', 'flight_state', 'movement-state')
 
 def getSensorData(d):
     # Temperature & Pressure Sensor (a.k.a Barometer)
@@ -63,6 +72,8 @@ drone = Drone()
 drone.connect()
 
 end_time = time.time() + 60 # How long the drone collects data for in seconds, adjust as needed
+
+print(sensorDataHeaders)
 
 while time.time() < end_time:
     getSensorData(drone)
