@@ -15,7 +15,7 @@ sensorData = deque() # Hold the sensor data
 sensorDataHeaders = ('temperature', 'pressure', 'elevation',
                      'roll', 'pitch', 'yaw', 'accel_x', 'accel_y', 'accel_z',
                      'angle_x', 'angle_y', 'angle_z', 'angular_speed_x',
-                     'angular_speed_y', 'angular_speed_y'
+                     'angular_speed_y', 'angular_speed_y',
                      'bottom_range', 'height',
                      'front_range', 'wall',
                      'pos_x', 'pos_y', 'pox_z', 'flow_velocity_x', 'flow_velocity_y',
@@ -118,7 +118,7 @@ writeSensorData()
 s3_client = boto3.client('s3')
 now = datetime.now()
 timestamp = now.strftime("%Y-%m-%d %H%M%S") # Format the date to remove colons to avoid issues
-awspath = f'{timestamp}/{filename}'
+awspath = f'{timestamp} {filename}'
 print(awspath)
 s3_client.upload_file(filename, os.environ["AWS_BUCKET"], awspath)
 
