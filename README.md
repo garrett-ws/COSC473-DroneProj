@@ -15,7 +15,7 @@ Run `pip install -r requirements.txt` install the necessary packages for the pro
 
 ## .env File
 
-The .env file has 4 variavles that must be setup.
+The .env file has 4 variables that must be setup.
 
 When using AWS Learner Lab the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN can be found by clicking `AWS Details` > then under `AWS CLI` click `Show`. 
 
