@@ -1,0 +1,11 @@
+Name – Krish Shah, Garrett Sangala, Xander Tifft
+Assignment – Deliverable #1 – Sensors.txt.
+
+Our team was able to gather data from all 7 sensors, namely – 
+1. Accelerometer
+2. Gyroscope
+3. Barometer 
+4. Front Range
+5. Back Range
+6. Optical Flow
+7. Color
