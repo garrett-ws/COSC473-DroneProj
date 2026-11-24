@@ -6,6 +6,8 @@ import csv
 import boto3
 import os
 from dotenv import load_dotenv
+from kafka import KafkaProducer
+import json
 
 load_dotenv()
 
@@ -59,6 +61,24 @@ def writeSensorData():
 
 drone = Drone()
 drone.connect()
+
+producer = KafkaProducer(
+    bootstrap_servers='localhost:9092',
+    value_serializer=lambda v:json.dumps(v).encode('utf-8')
+)
+
+# 1-minute flight at 2 Hz (~120 readings)
+for i in range(120):
+    data = {
+        "timestamp": time.time(),
+        "height": drone.get_height(),
+        "roll": drone.get_angle_x(),
+        "pitch": drone.get_angle_y(),
+        "yaw": drone.get_angle_z(),
+        "battery": drone.get_battery()
+    }
+producer.send("drone_telemetry", data)
+time.sleep(0.5)
 
 end_time = time.time() + 15 # How long the drone collects data for in seconds, adjust as needed
 
