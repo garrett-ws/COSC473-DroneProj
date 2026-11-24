@@ -17,15 +17,13 @@ sensorDataHeaders = ('timestampe, roll, pitch, yaw, height, battery')
 filename = "dronedata.csv" # Name of the file to write data to and upload to S3
 
 def getSensorData(d):
-    '''Collects data from each of the 7 sensors:
-    -Temperature/Pressure Sensor (a.k.a Barometer)
-    -Gyroscope & Acceleromter (These are two separate sensors, but the CoDrone EDU docs group
-    their functions together)
-    -Bottom Range Sensor
-    -Front Range Sensor
-    -Optical Flow Sensor
-    -Color Sensor
-    -Sensors (State Data, not a sensor exactly, but additional data about the drone)
+    '''Collects drone data from the following:
+   -Timestamp
+   -Roll
+   -Pitch
+   -Yaw
+   -Height
+   -Battery
 
     Args:
         d: A drone object
