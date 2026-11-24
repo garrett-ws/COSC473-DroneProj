@@ -146,8 +146,8 @@ spark = ( SparkSession.builder
 schema = StructType([
     StructField("timestamp", TimestampType()),
     StructField("height", DoubleType()),
-    StructField("pitch", DoubleType()),
     StructField("roll", DoubleType()),
+    StructField("pitch", DoubleType()),
     StructField("yaw", DoubleType()),
     StructField("battery", DoubleType())
 ])
@@ -163,13 +163,19 @@ telemetry_df = raw_df.select(from_json(col("value").cast("string"), schema).alia
 agg_df = (telemetry_df
           .withWatermark("timestamp", "10 seconds")
           .groupBy(window(col("timestamp"), "10 seconds"))
-          .agg(
+          .agg(              
               avg("height").alias("avg_height"),
+              avg("roll").alias("avg_roll"),
+              avg("pitch").alias("avg_pitch"),
+              avg("yaw").alias("avg_yaw"),
               avg("battery").alias("avg_battery")
           )
           .select(col("window.start").alias("start_time"),
                   col("window.end").alias("end_time"),
                   "avg_height",
+                  "avg_roll",
+                  "avg_pitch",
+                  "avg_yaw",
                   "avg_battery")
 )
 
