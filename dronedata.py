@@ -149,6 +149,7 @@ plt.xlabel("Time")
 plt.ylabel("Height (cm)")
 plt.grid(True)
 plt.savefig(f"spark_output/{batch_id}/drone_avg_height.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 # Plot average roll
 plt.figure(figsize=(10,5))
@@ -158,6 +159,7 @@ plt.xlabel("Time")
 plt.ylabel("Roll (Deg)")
 plt.grid(True)
 plt.savefig(f"spark_output/{batch_id}/drone_avg_roll.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 # Plot average pitch
 plt.figure(figsize=(10,5))
@@ -167,6 +169,7 @@ plt.xlabel("Time")
 plt.ylabel("Pitch (Deg)")
 plt.grid(True)
 plt.savefig(f"spark_output/{batch_id}/drone_avg_pitch.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 # Plot average yaw
 plt.figure(figsize=(10,5))
@@ -176,6 +179,7 @@ plt.xlabel("Time")
 plt.ylabel("Yaw (Deg)")
 plt.grid(True)
 plt.savefig(f"spark_output/{batch_id}/drone_avg_yaw.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 # Plot average battery
 plt.figure(figsize=(10,5))
@@ -185,5 +189,6 @@ plt.xlabel("Time")
 plt.ylabel("Battery (%)")
 plt.grid(True)
 plt.savefig(f"spark_output/{batch_id}/drone_avg_battery.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 drone.disconnect()
