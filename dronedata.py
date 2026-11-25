@@ -1,125 +1,189 @@
 from codrone_edu.drone import *
 from collections import deque
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import csv
 import boto3
 import os
 from dotenv import load_dotenv
+from kafka import KafkaProducer
+import json
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import from_json, col, avg, window
+from pyspark.sql.types import StructType, StructField, DoubleType, TimestampType
+import pandas as pd
+import glob
+import matplotlib.pyplot as plt
 
 load_dotenv()
 
-sensorData = deque() # Hold the sensor data
+##############################
+#       Kafka Producer       #
+##############################
 
-# Headers are separate since some algos do not want headers in the data
-sensorDataHeaders = ('temperature', 'pressure', 'elevation',
-                     'roll', 'pitch', 'yaw', 'accel_x', 'accel_y', 'accel_z',
-                     'angle_x', 'angle_y', 'angle_z', 'angular_speed_x',
-                     'angular_speed_y', 'angular_speed_y',
-                     'bottom_range', 'height',
-                     'front_range', 'wall',
-                     'pos_x', 'pos_y', 'pox_z', 'flow_velocity_x', 'flow_velocity_y',
-                     'color',
-                     'battery', 'flight_state', 'movement-state')
+def kafkaStream():
 
-filename = "dronedata.csv" # Name of the file to write data to and upload to S3
+    producer = KafkaProducer(
+        bootstrap_servers='localhost:9092',
+        value_serializer=lambda v:json.dumps(v).encode('utf-8')
+    )
 
-def getSensorData(d):
-    '''Collects data from each of the 7 sensors:
-    -Temperature/Pressure Sensor (a.k.a Barometer)
-    -Gyroscope & Acceleromter (These are two separate sensors, but the CoDrone EDU docs group
-    their functions together)
-    -Bottom Range Sensor
-    -Front Range Sensor
-    -Optical Flow Sensor
-    -Color Sensor
-    -Sensors (State Data, not a sensor exactly, but additional data about the drone)
+    # 1-minute flight at 2 Hz (~120 readings)
+    for i in range(120):
+        data = {
+            "timestamp": datetime.now().isoformat(),
+            "height": drone.get_height(),
+            "roll": drone.get_angle_x(),
+            "pitch": drone.get_angle_y(),
+            "yaw": drone.get_angle_z(),
+            "battery": drone.get_battery()
+        }
+        producer.send("drone_telemetry", data)
+        time.sleep(0.5)
 
-    Args:
-        d: A drone object
+    # Push any remaining windows after the 60 seconds are up
+    flush_time = (datetime.now() + timedelta(seconds=25)).isoformat()
+    flush_data = {
+        "timestamp": flush_time,
+        "height": drone.get_height(),
+        "roll": drone.get_angle_x(),
+        "pitch": drone.get_angle_y(),
+        "yaw": drone.get_angle_z(),
+        "battery": drone.get_battery()
+    }
+    producer.send("drone_telemetry", flush_data)
 
-    The data collected from the sensors is written to the @param sensorData deque as a tuple
-    '''
-    # Temperature & Pressure Sensor (a.k.a Barometer)
-    d_temp = d.get_drone_temperature()
-    d_pressure = d.get_pressure()
-    d_elevation = d.get_elevation()
-
-    # Gyroscope & Accelerometer Sensors
-    d_roll = d.get_angle_x()
-    d_pitch = d.get_angle_y()
-    d_yaw = d.get_angle_z()
-    d_accel_x = d.get_accel_x()
-    d_accel_y = d.get_accel_y()
-    d_accel_z = d.get_accel_z()
-    d_angle_x = d.get_angle_x()
-    d_angle_y = d.get_angle_y()
-    d_angle_z = d.get_angle_z()
-    d_angular_speed_x = d.get_angular_speed_x()
-    d_angular_speed_y = d.get_angular_speed_y()
-    d_angular_speed_z = d.get_angular_speed_z()
-
-    # Bottom Range Sensor
-    d_bottom = d.get_bottom_range()
-    d_height = d.get_height()
-
-    # Front Range Sensor
-    d_front = d.get_front_range()
-    d_wall = d.detect_wall()
-    
-    # Optical Flow Sensor
-    d_pos_x = d.get_pos_x()
-    d_pos_y = d.get_pos_y()
-    d_pos_z = d.get_pos_z()
-    d_flow_velocity_x = d.get_flow_velocity_x()
-    d_flow_velocity_y = d.get_flow_velocity_y()
-
-    # Color Sensor
-    d_color = d.get_color_data()
-
-    # State Data Sensor
-    d_battery = d.get_battery()
-    d_flight_state = d.get_flight_state()
-    d_movement_state = d.get_movement_state()
-
-    sensorData.append((d_temp, d_pressure, d_elevation,
-                       d_roll, d_pitch, d_yaw, d_accel_x, d_accel_y, d_accel_z, d_angle_x, 
-                       d_angle_y, d_angle_z, d_angular_speed_x, d_angular_speed_y, d_angular_speed_z,
-                       d_bottom, d_height, 
-                       d_front, d_wall,
-                       d_pos_x, d_pos_y, d_pos_z, d_flow_velocity_x, d_flow_velocity_y,
-                       d_color,
-                       d_battery, d_flight_state, d_movement_state))
-
-def printSensorData():
-    '''Prints the last row of sensor data'''
-    print(sensorData[-1])
-
-def writeSensorData():
-    '''Writes the sensor data to a csv file'''
-    with open(filename, mode="w", newline="", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerows(sensorData)
+    # Flush and closeo the producer
+    producer.flush()
+    producer.close()
 
 drone = Drone()
 drone.connect()
 
-end_time = time.time() + 60 # How long the drone collects data for in seconds, adjust as needed
+##############################
+# Spark Structured Streaming #
+##############################
 
-print(sensorDataHeaders)
-
-while time.time() < end_time:
-    getSensorData(drone)
-    printSensorData()
-
-writeSensorData()
-
-# Upload the data to AWS
-s3_client = boto3.client('s3')
 now = datetime.now()
-timestamp = now.strftime("%Y-%m-%d %H%M%S") # Format the date to remove colons to avoid issues
-awspath = f'{timestamp} {filename}'
-print(awspath)
-s3_client.upload_file(filename, os.environ["AWS_BUCKET"], awspath)
+timestamp = now.strftime("%Y-%m-%d_%H%M%S") # Format the date to remove colons to avoid issues in the filename
+
+batch_id = f'batch_{timestamp}' # Store each run in its own folder
+
+spark = ( SparkSession.builder
+         .appName("DroneTelemetry")
+         .config("spark.jars.packages", f"org.apache.spark:spark-sql-kafka-0-10_2.13:{pyspark.__version__}")
+         .getOrCreate() 
+         )
+
+schema = StructType([
+    StructField("timestamp", TimestampType()),
+    StructField("height", DoubleType()),
+    StructField("roll", DoubleType()),
+    StructField("pitch", DoubleType()),
+    StructField("yaw", DoubleType()),
+    StructField("battery", DoubleType())
+])
+
+raw_df = (spark.readStream
+          .format("kafka")
+          .option("kafka.bootstrap.servers", "localhost:9092")
+          .option("subscribe", "drone_telemetry")
+          .load())
+
+telemetry_df = raw_df.select(from_json(col("value").cast("string"), schema).alias("data")).select("data.*")
+
+agg_df = (telemetry_df
+          .withWatermark("timestamp", "10 seconds")
+          .groupBy(window(col("timestamp"), "10 seconds"))
+          .agg(              
+              avg("height").alias("avg_height"),
+              avg("roll").alias("avg_roll"),
+              avg("pitch").alias("avg_pitch"),
+              avg("yaw").alias("avg_yaw"),
+              avg("battery").alias("avg_battery")
+          )
+          .select(col("window.start").alias("start_time"),
+                  col("window.end").alias("end_time"),
+                  "avg_height",
+                  "avg_roll",
+                  "avg_pitch",
+                  "avg_yaw",
+                  "avg_battery")
+)
+
+agg_df = agg_df.withColumn("partition_time", col("start_time")) # Add a partition_time col
+
+query = (agg_df.writeStream
+         .outputMode("append")
+         .format("csv")
+         .option("header", "true")
+         .partitionBy("partition_time")
+         .option("path", f"spark_output/{batch_id}")
+         .option("checkpointLocation", "checkpoint_dir")         
+         .start())
+
+# Start the Kafka stream
+producer_thread = threading.Thread(target=kafkaStream, daemon=True)
+producer_thread.start()
+
+time.sleep(100) # Give some extra time so that the query doesn't stop early
+query.stop()
+
+##############################
+#     Data Visualization     #
+##############################
+
+# Read all CSV files generated by Spark
+files = glob.glob(f"spark_output/{batch_id}/**/*.csv", recursive=True)
+df = pd.concat([pd.read_csv(f) for f in files])
+
+# Convert timestamps to datetime
+df['start_time'] = pd.to_datetime(df['start_time'])
+
+# Plot average height
+plt.figure(figsize=(10,5))
+plt.plot(df['start_time'], df['avg_height'], marker='o')
+plt.title("Average Drone Height per 10-Second Window")
+plt.xlabel("Time")
+plt.ylabel("Height (cm)")
+plt.grid(True)
+plt.savefig(f"spark_output/{batch_id}/drone_avg_height.png", dpi=300, bbox_inches="tight")
+
+# Plot average roll
+plt.figure(figsize=(10,5))
+plt.plot(df['start_time'], df['avg_roll'], marker='o', color='orange')
+plt.title("Average Drone Roll per 10-Second Window")
+plt.xlabel("Time")
+plt.ylabel("Roll (Deg)")
+plt.grid(True)
+plt.savefig(f"spark_output/{batch_id}/drone_avg_roll.png", dpi=300, bbox_inches="tight")
+
+# Plot average pitch
+plt.figure(figsize=(10,5))
+plt.plot(df['start_time'], df['avg_pitch'], marker='o', color='orange')
+plt.title("Average Drone Pitch per 10-Second Window")
+plt.xlabel("Time")
+plt.ylabel("Pitch (Deg)")
+plt.grid(True)
+plt.savefig(f"spark_output/{batch_id}/drone_avg_pitch.png", dpi=300, bbox_inches="tight")
+
+# Plot average yaw
+plt.figure(figsize=(10,5))
+plt.plot(df['start_time'], df['avg_yaw'], marker='o', color='orange')
+plt.title("Average Drone Yaw per 10-Second Window")
+plt.xlabel("Time")
+plt.ylabel("Yaw (Deg)")
+plt.grid(True)
+plt.savefig(f"spark_output/{batch_id}/drone_avg_yaw.png", dpi=300, bbox_inches="tight")
+
+# Plot average battery
+plt.figure(figsize=(10,5))
+plt.plot(df['start_time'], df['avg_battery'], marker='o', color='orange')
+plt.title("Average Drone Battery per 10-Second Window")
+plt.xlabel("Time")
+plt.ylabel("Battery (%)")
+plt.grid(True)
+plt.savefig(f"spark_output/{batch_id}/drone_avg_battery.png", dpi=300, bbox_inches="tight")
 
 drone.disconnect()
