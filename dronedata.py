@@ -54,7 +54,7 @@ def kafkaStream():
     }
     producer.send("drone_telemetry", flush_data)
 
-    # Now flush and close everything cleanly
+    # Flush and closeo the producer
     producer.flush()
     producer.close()
 
@@ -113,15 +113,6 @@ agg_df = (telemetry_df
 )
 
 agg_df = agg_df.withColumn("partition_time", col("start_time")) # Add a partition_time col
-
-# Debug query, remove before submission
-debug_query = (
-    agg_df.writeStream
-    .outputMode("update")  # Shows windows immediately as they update
-    .format("console")
-    .option("truncate", "false")
-    .start()
-)
 
 query = (agg_df.writeStream
          .outputMode("append")
