@@ -127,7 +127,7 @@ query = (agg_df.writeStream
 producer_thread = threading.Thread(target=kafkaStream, daemon=True)
 producer_thread.start()
 
-time.sleep(90)
+time.sleep(100) # Give some extra time so that the query doesn't stop early
 query.stop()
 
 ##############################
